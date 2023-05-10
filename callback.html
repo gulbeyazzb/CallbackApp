@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha2/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-aFq/bzH65dt+w6FI2ooMVUpc+21e0SRygnTpmBvdBgSdnuTN7QbdgL+OapgHtvPp" crossorigin="anonymous">
+    <title>Document</title>
+</head>
+<style>
+    .col-3 img {
+        height: 120px;
+    }
+
+    #details {
+        opacity: 0;
+    }
+
+    #loading {
+        display: none;
+    }
+</style>
+
+<body>
+    <div class="container my-5">
+        <div id="errors"></div>
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="input-group">
+                    <input id="txtSearch" type="text" class="form-control">
+                    <button id="btnSearch" type="button" class="btn btn-primary rounded-5 mx-2">Yükle</button>
+                    <button id="btnLocation" type="button" class="btn btn-danger rounded-5 mx-1">Konumum</button>
+                </div>
+            </div>
+        </div>
+        <div id="loading" class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div id="details">
+            <div class="card mb-3">
+                <div class="card-header">
+                    Arama Sonucu
+                </div>
+                <div class="card-body">
+                    <div class="row" id="country-details">
+                    </div>
+                </div>
+            </div>
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6>Komşu Ülkeler</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row" id="neighbors"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+
+
+
+        document.querySelector("#btnSearch").addEventListener("click", () => {
+            document.querySelector("#details").style.opacity = 0;
+            let text = document.querySelector("#txtSearch").value;
+            getCountry(text);
+        });
+
+        document.querySelector("#btnLocation").addEventListener("click", () => {
+            document.querySelector("#loading").style.display = "block"
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(onSuccess, onError);
+            }
+        });
+
+        async function onSuccess(position) {
+            document.querySelector("#loading").style.display = "none"
+
+            let lng = position.coords.longitude;
+            let lat = position.coords.latitude;
+
+            const apiKey = ""; //your api key
+            const url = `https://api.opencagedata.com/geocode/v1/json?q=${lat}+${lng}&key=${apiKey}`;
+            const response = await fetch(url);
+            const data = await response.json();
+            const country = data.results[0].components.country;
+            document.querySelector("#txtSearch").value = country;
+            document.querySelector("#btnSearch").click();
+
+        }
+
+        function onError(err) {
+            document.querySelector("#loading").style.display = "none"
+            document.querySelector("#errors").innerText = "Konum Bilgisi Paylaşılmadı";
+        }
+
+
+        async function getCountry(country) {
+            document.querySelector("#loading").style.display = "block"
+
+            try {
+
+                const response = await fetch('https://restcountries.com/v3.1/name/' + country);
+                if (!response.ok)
+                    throw new Error("Ülke Bulunamadı");
+                const datas = await response.json();
+                renderCountry(datas[0]);
+
+                const countries = await datas[0].borders;
+                if (!countries)
+                    throw new Error("Komşu Bulunamadı")
+                const neighbors = await fetch('https://restcountries.com/v3.1/alpha?codes=' + countries.toString());
+                const data = await neighbors.json();
+
+                renderNeighbors(data);
+
+            }
+            catch (err) {
+                document.querySelector("#loading").style.display = "block"
+                renderError(err);
+            }
+        }
+
+        function renderCountry(data) {
+            document.querySelector("#loading").style.display = "none"
+
+            document.querySelector("#country-details").innerHTML = "";
+            document.querySelector("#neighbors").innerHTML = "";
+            html = ` 
+                    <div class="col-3">
+                        <img src="${data.flags.png}" alt="" class="img-fluid">
+                    </div>
+                    <div class="col-8">
+                        <h3 class="card-title">${data.name.common}</h3>
+                        <hr>
+                        <div class="row">
+                            <div class="col-4">Nüfus:</div>
+                            <div class="col-8">${(data.population / 1000000).toFixed(1)}</div>
+                            <div class="col-4">Resmi Dil:</div>
+                            <div class="col-8">${Object.values(data.languages)}</div>
+                            <div class="col-4">Başkent:</div>
+                            <div class="col-8">${data.capital[0]}</div>
+                        </div>
+                    </div>
+             `;
+            document.querySelector("#details").style.opacity = 1;
+            document.querySelector("#country-details").innerHTML = html;
+        }
+
+        function renderNeighbors(data) {
+            document.querySelector("#loading").style.display = "none"
+            let html = "";
+            for (let country of data) {
+                html += `
+        <div class="col-4 mt-2">
+            <div class="card">
+                <img src="${country.flags.png}" class="card-img-top">
+                <div class="card-body">
+                    <h6 class="card-title">${country.name.common}</h6>
+                     <div class="row">
+                    <div class="col-4">Para Birimi:</div>
+                    <div class="col-8 px-0">${Object.values(country.currencies)[0].name} ${Object.values(country.currencies)[0].symbol}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+            }
+
+            document.querySelector("#neighbors").innerHTML = html;
+        }
+
+        function renderError(err) {
+            document.querySelector("#loading").style.display = "none"
+            const html = `
+                <div class="alert alert-danger">
+                    ${err.message}
+                </div>
+            `;
+            setTimeout(() => {
+                document.querySelector("#errors").innerHTML = "";
+            }, 5000);
+            document.querySelector("#errors").innerHTML = html;
+        }
+
+
+
+    </script>
+</body>
+
+</html>
